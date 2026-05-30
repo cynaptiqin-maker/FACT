@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fact
+  labels:
+    app.kubernetes.io/name: fact
+    app.kubernetes.io/part-of: fact-finos

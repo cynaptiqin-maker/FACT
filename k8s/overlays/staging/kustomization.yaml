@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: fact-staging
+
+resources:
+  - ../../base
+
+namePrefix: staging-
+
+patches:
+  - path: replica-patch.yaml
+    target:
+      kind: Deployment
+      name: fact-backend
+  - path: image-patch.yaml
+
+configMapGenerator:
+  - name: fact-config
+    behavior: merge
+    literals:
+      - NODE_ENV=staging
+      - LOG_LEVEL=debug

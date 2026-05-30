@@ -1,0 +1,72 @@
+name: Migration Check
+
+on:
+  push:
+    paths:
+      - 'backend/migrations/**'
+      - 'backend/scripts/migrate.js'
+      - '.github/workflows/migrations.yml'
+  pull_request:
+    paths:
+      - 'backend/migrations/**'
+      - 'backend/scripts/migrate.js'
+
+jobs:
+  migration-check:
+    name: Verify migrations apply cleanly
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: fact_migration_test
+          POSTGRES_USER: fact_user
+          POSTGRES_PASSWORD: fact_secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fact_user -d fact_migration_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci
+
+      - name: Create .env for migration test
+        working-directory: backend
+        run: |
+          cat > .env <<EOF
+          DB_HOST=localhost
+          DB_PORT=5432
+          DB_NAME=fact_migration_test
+          DB_USER=fact_user
+          DB_PASSWORD=fact_secret
+          DB_SSL=false
+          EOF
+
+      - name: Apply all migrations (first run)
+        working-directory: backend
+        run: node scripts/migrate.js
+
+      - name: Verify idempotency (second run must be a no-op)
+        working-directory: backend
+        run: |
+          output=$(node scripts/migrate.js 2>&1)
+          echo "$output"
+          echo "$output" | grep -q "All migrations are up to date"
+
+      - name: Show migration status
+        working-directory: backend
+        run: node scripts/migrate.js --status

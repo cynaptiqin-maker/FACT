@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fact-uploads-pvc
+  namespace: fact
+spec:
+  accessModes:
+    - ReadWriteMany   # requires a shared filesystem StorageClass (e.g. NFS, EFS, Azure Files)
+  storageClassName: ""   # set your cluster's StorageClass, e.g. "efs-sc" on AWS
+  resources:
+    requests:
+      storage: 10Gi

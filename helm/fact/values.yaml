@@ -1,0 +1,74 @@
+global:
+  registry: ghcr.io/REPLACE_ORG
+  imageTag: latest
+
+backend:
+  replicaCount: 2
+  image:
+    repository: fact-backend
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+
+frontend:
+  replicaCount: 2
+  image:
+    repository: fact-frontend
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+
+ingress:
+  enabled: true
+  className: nginx
+  backendHost: api.fact.example.com
+  frontendHost: fact.example.com
+  tls: false
+  tlsSecretName: fact-tls
+
+config:
+  nodeEnv: production
+  logLevel: warn
+  rateLimitMax: "200"
+  authRateLimitMax: "20"
+  mfaIssuer: FACT_FinOS
+  auditLogEnabled: "true"
+  multiTenantMode: "true"
+  jwtExpiresIn: 15m
+  jwtRefreshExpiresIn: 7d
+
+secrets:
+  dbHost: postgres-service
+  dbUser: fact_user
+  dbPassword: REPLACE_ME
+  dbName: fact_db
+  redisHost: redis-service
+  redisPassword: REPLACE_ME
+  jwtSecret: REPLACE_ME_min_64_chars
+  jwtRefreshSecret: REPLACE_ME_min_64_chars
+  openaiApiKey: ""
+
+uploads:
+  storageClass: ""
+  size: 10Gi
+  accessMode: ReadWriteMany

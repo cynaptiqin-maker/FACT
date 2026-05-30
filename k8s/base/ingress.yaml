@@ -1,0 +1,37 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fact-ingress
+  namespace: fact
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"  # enable when cert-manager is installed
+spec:
+  ingressClassName: nginx
+  # tls:
+  #   - hosts:
+  #       - fact.example.com
+  #       - api.fact.example.com
+  #     secretName: fact-tls
+  rules:
+    - host: fact.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: fact-frontend-service
+                port:
+                  number: 3000
+    - host: api.fact.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: fact-backend-service
+                port:
+                  number: 5000

@@ -1,0 +1,22 @@
+global:
+  imageTag: main   # overridden by CI with sha-<commit>
+
+backend:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+
+frontend:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+
+ingress:
+  backendHost: api.fact-staging.example.com
+  frontendHost: fact-staging.example.com
+
+config:
+  nodeEnv: staging
+  logLevel: debug
+  rateLimitMax: "2000"
+  authRateLimitMax: "200"

@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fact-frontend
+  namespace: fact
+  labels:
+    app: fact-frontend
+    app.kubernetes.io/part-of: fact-finos
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fact-frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: fact-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/REPLACE_ORG/fact-frontend:latest
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: VITE_API_URL
+              value: "https://api.fact.example.com"
+            - name: VITE_APP_NAME
+              value: "FACT FinOS"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 30

@@ -1,0 +1,156 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: fact_db
+          POSTGRES_USER: fact_user
+          POSTGRES_PASSWORD: fact_secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fact_user -d fact_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+            e2e/package-lock.json
+
+      # ── Backend setup ────────────────────────────────────────────────────────
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci
+
+      - name: Create backend .env
+        working-directory: backend
+        run: |
+          cat > .env <<EOF
+          NODE_ENV=development
+          PORT=5001
+          FRONTEND_URL=http://localhost:3000
+          DB_HOST=localhost
+          DB_PORT=5432
+          DB_NAME=fact_db
+          DB_USER=fact_user
+          DB_PASSWORD=fact_secret
+          DB_SSL=false
+          REDIS_HOST=localhost
+          REDIS_PORT=6379
+          REDIS_PASSWORD=
+          JWT_SECRET=ci-e2e-secret-at-least-64-characters-long-for-hmac-sha256-ci
+          JWT_REFRESH_SECRET=ci-e2e-refresh-64-chars-long-for-hmac-sha256-algorithm
+          JWT_EXPIRES_IN=15m
+          JWT_REFRESH_EXPIRES_IN=7d
+          MFA_ENFORCE=false
+          OPENAI_API_KEY=sk-test
+          RATE_LIMIT_MAX=2000
+          AUTH_RATE_LIMIT_MAX=200
+          AUDIT_LOG_ENABLED=true
+          LOG_LEVEL=error
+          MULTI_TENANT_MODE=true
+          DEFAULT_TENANT_ID=00000000-0000-0000-0000-000000000001
+          SUPER_ADMIN_EMAIL=admin@fact.hospital
+          EOF
+
+      - name: Run migrations
+        working-directory: backend
+        run: node scripts/migrate.js
+
+      - name: Seed database
+        working-directory: backend
+        run: node src/database/seed.js
+
+      - name: Start backend
+        working-directory: backend
+        run: node server.js &
+        env:
+          NODE_ENV: development
+
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:5001/health && break
+            sleep 2
+          done
+
+      # ── Frontend setup ───────────────────────────────────────────────────────
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Serve frontend
+        working-directory: frontend
+        run: npx vite preview --port 3000 &
+
+      - name: Wait for frontend
+        run: |
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:3000 && break
+            sleep 2
+          done
+
+      # ── Playwright ───────────────────────────────────────────────────────────
+      - name: Install Playwright deps
+        working-directory: e2e
+        run: npm ci && npx playwright install chromium --with-deps
+
+      - name: Run E2E tests
+        working-directory: e2e
+        run: FACT_URL=http://localhost:3000 SKIP_BACKEND_SERVER=1 npx playwright test
+        env:
+          CI: 'true'
+          DEMO_EMAIL: admin@factos.com
+          DEMO_PASSWORD: Demo@1234
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7

@@ -1,0 +1,14 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:3004",
+      "localStorage": [
+        {
+          "name": "fact-auth",
+          "value": "{\"state\":{\"user\":null,\"token\":null,\"refreshToken\":null,\"isAuthenticated\":false,\"permissions\":[],\"roles\":[]},\"version\":0}"
+        }
+      ]
+    }
+  ]
+}

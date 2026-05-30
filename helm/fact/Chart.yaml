@@ -1,0 +1,13 @@
+apiVersion: v2
+name: fact
+description: FACT FinOS — Hospital Finance Accounting with Complete Transparency
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - finance
+  - hospital
+  - accounting
+maintainers:
+  - name: FACT Team
+home: https://github.com/REPLACE_ORG/fact

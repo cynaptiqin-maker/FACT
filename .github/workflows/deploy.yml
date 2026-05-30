@@ -1,0 +1,193 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
+  REGISTRY: ghcr.io
+  IMAGE_BACKEND: ${{ github.repository }}/fact-backend
+  IMAGE_FRONTEND: ${{ github.repository }}/fact-frontend
+
+jobs:
+  # ─── Require CI to pass first ─────────────────────────────────────────────
+  wait-for-ci:
+    name: Wait for CI
+    uses: ./.github/workflows/ci.yml
+
+  # ─── Build & push Docker images ───────────────────────────────────────────
+  build-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: wait-for-ci
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      backend-tag: ${{ steps.meta-backend.outputs.tags }}
+      frontend-tag: ${{ steps.meta-frontend.outputs.tags }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Backend image metadata
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_BACKEND }}
+          tags: |
+            type=sha,prefix=sha-
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Frontend image metadata
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_FRONTEND }}
+          tags: |
+            type=sha,prefix=sha-
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─── Deploy to staging (Helm) ────────────────────────────────────────────
+  deploy-staging:
+    name: Deploy → Staging
+    runs-on: ubuntu-latest
+    needs: build-images
+    environment:
+      name: staging
+      url: https://fact-staging.example.com
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.14.0
+
+      # ── Option A: Kubernetes + Helm (configure KUBECONFIG secret) ──────────
+      # Uncomment and configure KUBECONFIG_STAGING secret in repo settings.
+      #
+      # - name: Set up kubectl
+      #   uses: azure/k8s-set-context@v3
+      #   with:
+      #     method: kubeconfig
+      #     kubeconfig: ${{ secrets.KUBECONFIG_STAGING }}
+      #
+      # - name: Helm upgrade (staging)
+      #   run: |
+      #     IMAGE_TAG="${{ needs.build-images.outputs.backend-tag }}"
+      #     helm upgrade --install fact-staging ./helm/fact \
+      #       --namespace fact-staging --create-namespace \
+      #       -f helm/values-staging.yaml \
+      #       --set global.imageTag="${IMAGE_TAG}" \
+      #       --set secrets.dbPassword="${{ secrets.DB_PASSWORD_STAGING }}" \
+      #       --set secrets.jwtSecret="${{ secrets.JWT_SECRET_STAGING }}" \
+      #       --set secrets.jwtRefreshSecret="${{ secrets.JWT_REFRESH_SECRET_STAGING }}" \
+      #       --set secrets.redisPassword="${{ secrets.REDIS_PASSWORD_STAGING }}" \
+      #       --wait --timeout 5m
+
+      # ── Option B: SSH + Docker Compose ────────────────────────────────────
+      # Uncomment and configure STAGING_SSH_KEY + STAGING_HOST secrets.
+      #
+      # - name: Deploy via SSH
+      #   uses: appleboy/ssh-action@v1.0.0
+      #   with:
+      #     host: ${{ secrets.STAGING_HOST }}
+      #     username: deploy
+      #     key: ${{ secrets.STAGING_SSH_KEY }}
+      #     script: |
+      #       cd /opt/fact
+      #       docker compose pull
+      #       docker compose up -d --remove-orphans
+
+      - name: Deploy step placeholder
+        run: |
+          echo "Staging deploy — configure KUBECONFIG_STAGING or STAGING_SSH_KEY secrets"
+          echo "  Helm: helm upgrade --install fact-staging ./helm/fact -f helm/values-staging.yaml ..."
+          echo "  SSH:  ssh staging 'docker compose pull && docker compose up -d'"
+
+  # ─── Deploy to production (Helm, tags only) ──────────────────────────────
+  deploy-production:
+    name: Deploy → Production
+    runs-on: ubuntu-latest
+    needs: [build-images, deploy-staging]
+    environment:
+      name: production
+      url: https://fact.example.com
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.14.0
+
+      # ── Helm upgrade (production) ──────────────────────────────────────────
+      # Uncomment and configure KUBECONFIG_PROD secret in repo settings.
+      #
+      # - name: Set up kubectl
+      #   uses: azure/k8s-set-context@v3
+      #   with:
+      #     method: kubeconfig
+      #     kubeconfig: ${{ secrets.KUBECONFIG_PROD }}
+      #
+      # - name: Helm upgrade (production)
+      #   run: |
+      #     IMAGE_TAG="${{ github.ref_name }}"
+      #     helm upgrade --install fact ./helm/fact \
+      #       --namespace fact --create-namespace \
+      #       --set global.imageTag="${IMAGE_TAG}" \
+      #       --set secrets.dbPassword="${{ secrets.DB_PASSWORD_PROD }}" \
+      #       --set secrets.jwtSecret="${{ secrets.JWT_SECRET_PROD }}" \
+      #       --set secrets.jwtRefreshSecret="${{ secrets.JWT_REFRESH_SECRET_PROD }}" \
+      #       --set secrets.redisPassword="${{ secrets.REDIS_PASSWORD_PROD }}" \
+      #       --wait --timeout 10m
+
+      - name: Deploy step placeholder
+        run: |
+          echo "Production deploy — configure KUBECONFIG_PROD secret"
+          echo "  helm upgrade --install fact ./helm/fact --set global.imageTag=${{ github.ref_name }} ..."

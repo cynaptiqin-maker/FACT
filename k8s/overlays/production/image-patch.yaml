@@ -1,0 +1,25 @@
+# Replace IMAGE_TAG with the semver release tag (e.g. v1.2.0)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fact-backend
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: migrate
+          image: ghcr.io/REPLACE_ORG/fact-backend:${IMAGE_TAG}
+      containers:
+        - name: backend
+          image: ghcr.io/REPLACE_ORG/fact-backend:${IMAGE_TAG}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fact-frontend
+spec:
+  template:
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/REPLACE_ORG/fact-frontend:${IMAGE_TAG}

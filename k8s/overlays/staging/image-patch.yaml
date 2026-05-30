@@ -1,0 +1,26 @@
+# Replace IMAGE_TAG with the actual tag (e.g. sha-abc1234 or main)
+# Usage: IMAGE_TAG=sha-abc1234 envsubst < image-patch.yaml | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fact-backend
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: migrate
+          image: ghcr.io/REPLACE_ORG/fact-backend:${IMAGE_TAG}
+      containers:
+        - name: backend
+          image: ghcr.io/REPLACE_ORG/fact-backend:${IMAGE_TAG}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fact-frontend
+spec:
+  template:
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/REPLACE_ORG/fact-frontend:${IMAGE_TAG}
