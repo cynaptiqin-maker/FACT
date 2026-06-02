@@ -2,6 +2,15 @@
 
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../../../config/database');
+const fieldEncryption = require('../../../shared/encryption/fieldEncryption');
+
+function decryptRow(instance) {
+  if (!instance) return;
+  if (instance.dataValues.pan_number != null)
+    instance.dataValues.pan_number = fieldEncryption.decryptIfPresent(instance.dataValues.pan_number);
+  if (instance.dataValues.passport_number != null)
+    instance.dataValues.passport_number = fieldEncryption.decryptIfPresent(instance.dataValues.passport_number);
+}
 
 const FCRADonor = sequelize.define(
   'FCRADonor',
@@ -20,7 +29,9 @@ const FCRADonor = sequelize.define(
     address: { type: DataTypes.JSONB, defaultValue: {} },
     email: { type: DataTypes.STRING(100) },
     phone: { type: DataTypes.STRING(30) },
+    // NOTE: column widened to TEXT in migration 010
     pan_number: { type: DataTypes.STRING(10) },
+    // NOTE: column widened to TEXT in migration 010
     passport_number: { type: DataTypes.STRING(20) },
     org_registration_number: { type: DataTypes.STRING(50) },
     website: { type: DataTypes.STRING(200) },
@@ -43,6 +54,22 @@ const FCRADonor = sequelize.define(
       { fields: ['tenant_id', 'country'] },
       { fields: ['tenant_id', 'status'] },
     ],
+    hooks: {
+      beforeCreate: (instance) => {
+        instance.pan_number = fieldEncryption.encryptIfPresent(instance.pan_number);
+        instance.passport_number = fieldEncryption.encryptIfPresent(instance.passport_number);
+      },
+      beforeUpdate: (instance) => {
+        if (instance.changed('pan_number'))
+          instance.pan_number = fieldEncryption.encryptIfPresent(instance.pan_number);
+        if (instance.changed('passport_number'))
+          instance.passport_number = fieldEncryption.encryptIfPresent(instance.passport_number);
+      },
+      afterFind: (result) => {
+        if (Array.isArray(result)) result.forEach(decryptRow);
+        else decryptRow(result);
+      },
+    },
   }
 );
 

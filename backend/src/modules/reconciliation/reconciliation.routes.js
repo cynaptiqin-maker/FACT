@@ -23,6 +23,7 @@ const { sequelize } = require('../../config/database');
 const { getRedisClient } = require('../../config/redis');
 const { ReconciliationService } = require('../../shared/reconciliation/ReconciliationService');
 const { getExceptionEngine, EXCEPTION_TYPES } = require('../../shared/exceptions/ExceptionEngine');
+const { logEvent, AUDIT_ACTIONS } = require('../../shared/audit/auditLogger');
 const Decimal = require('decimal.js');
 
 router.use(authenticate);
@@ -143,6 +144,18 @@ router.post('/match', requirePermission('accounting:write'), asyncHandler(async 
     { replacements: { journalEntryId, tenantId } }
   );
 
+  await logEvent({
+    tenantId,
+    userId: req.user.id,
+    userEmail: req.user.email,
+    action: AUDIT_ACTIONS.RECON_MATCHED,
+    entity: 'JournalEntry',
+    entityId: journalEntryId,
+    module: 'reconciliation',
+    metadata: { reconType, sourceId, priorStatus: 'UNMATCHED', newStatus: 'MATCHED' },
+    critical: true,
+  });
+
   res.json({ success: true, journalEntryId, reconStatus: 'MATCHED' });
 }));
 
@@ -159,6 +172,18 @@ router.post('/unmatch', requirePermission('accounting:write'), asyncHandler(asyn
     { replacements: { journalEntryId, tenantId } }
   );
 
+  await logEvent({
+    tenantId,
+    userId: req.user.id,
+    userEmail: req.user.email,
+    action: AUDIT_ACTIONS.RECON_UNMATCHED,
+    entity: 'JournalEntry',
+    entityId: journalEntryId,
+    module: 'reconciliation',
+    metadata: { priorStatus: 'MATCHED', newStatus: 'UNMATCHED' },
+    critical: true,
+  });
+
   res.json({ success: true, journalEntryId, reconStatus: 'UNMATCHED' });
 }));
 
@@ -174,6 +199,18 @@ router.post('/dispute', requirePermission('accounting:write'), asyncHandler(asyn
      WHERE id = :journalEntryId AND tenant_id = :tenantId`,
     { replacements: { journalEntryId, tenantId } }
   );
+
+  await logEvent({
+    tenantId,
+    userId: req.user.id,
+    userEmail: req.user.email,
+    action: AUDIT_ACTIONS.RECON_DISPUTED,
+    entity: 'JournalEntry',
+    entityId: journalEntryId,
+    module: 'reconciliation',
+    metadata: { reason, priorStatus: 'UNMATCHED', newStatus: 'DISPUTED' },
+    critical: true,
+  });
 
   // Raise exception for disputed items
   const engine = getExceptionEngine();

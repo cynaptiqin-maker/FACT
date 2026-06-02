@@ -493,18 +493,10 @@ describe('SharedPostingEngine', () => {
     });
   });
 
-  // 4.2 audit failure is non-blocking ───────────────────────────────────────
-  it('audit failure is non-blocking — post still succeeds when audit throws', async () => {
-    const { engine, logger } = buildEngine({ auditFails: true });
-    const result = await engine.post(makeBaseContract());
-
-    // Post must succeed despite audit failure
-    expect(result.entryNumber).toBe('JV-2026-000001');
-    // Warning must have been logged
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('audit logging failed'),
-      expect.any(Object)
-    );
+  // 4.2 audit failure is fail-closed — post is blocked when audit throws ────
+  it('audit failure is fail-closed — post throws when audit write fails', async () => {
+    const { engine } = buildEngine({ auditFails: true });
+    await expect(engine.post(makeBaseContract())).rejects.toThrow('Audit DB down');
   });
 
   // 4.3 idempotencyKey defaults to `${sourceModule}:${sourceId}` ───────────

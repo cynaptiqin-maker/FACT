@@ -3,6 +3,7 @@
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
 const { sequelize } = require('../../config/database');
+const fieldEncryption = require('../../shared/encryption/fieldEncryption');
 
 const MFA_ISSUER = process.env.MFA_ISSUER || 'FACT FinOS';
 
@@ -36,13 +37,26 @@ async function generateMFASecret(userEmail) {
 }
 
 /**
- * Verify a TOTP token against stored secret.
+ * Decrypt a stored MFA secret (handles both encrypted and legacy plaintext values).
  *
- * @param {string} secret - Base32 encoded secret
+ * @param {string} storedSecret
+ * @returns {string}
+ */
+function decryptSecret(storedSecret) {
+  return fieldEncryption.decryptIfPresent(storedSecret);
+}
+
+/**
+ * Verify a TOTP token against stored secret.
+ * Accepts both AES-256-GCM encrypted blobs (v1:…) and legacy plaintext secrets
+ * (migration path — decryptIfPresent returns plaintext unchanged).
+ *
+ * @param {string} storedSecret - Encrypted or plaintext Base32 secret from DB
  * @param {string} token - 6-digit TOTP token from authenticator app
  * @returns {boolean}
  */
-function verifyMFAToken(secret, token) {
+function verifyMFAToken(storedSecret, token) {
+  const secret = decryptSecret(storedSecret);
   return speakeasy.totp.verify({
     secret,
     encoding: 'base32',
@@ -70,6 +84,7 @@ function generateBackupCodes() {
  * Call after user has verified first TOTP token.
  */
 async function enableMFA(userId, tenantId, secret, hashedBackupCodes) {
+  const encryptedSecret = fieldEncryption.encrypt(secret);
   await sequelize.query(
     `UPDATE users
      SET mfa_enabled = true, mfa_secret = :secret, mfa_backup_codes = :backupCodes, updated_at = NOW()
@@ -78,7 +93,7 @@ async function enableMFA(userId, tenantId, secret, hashedBackupCodes) {
       replacements: {
         userId,
         tenantId,
-        secret,
+        secret: encryptedSecret,
         backupCodes: JSON.stringify(hashedBackupCodes),
       },
     }
@@ -131,6 +146,7 @@ async function verifyBackupCode(userId, tenantId, code) {
 module.exports = {
   generateMFASecret,
   verifyMFAToken,
+  decryptSecret,
   generateBackupCodes,
   enableMFA,
   disableMFA,

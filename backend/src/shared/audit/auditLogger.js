@@ -55,6 +55,15 @@ const AUDIT_ACTIONS = {
   WORKFLOW_REJECTED: 'WORKFLOW_REJECTED',
   WORKFLOW_ESCALATED: 'WORKFLOW_ESCALATED',
 
+  // Reconciliation
+  RECON_MATCHED:   'RECON_MATCHED',
+  RECON_UNMATCHED: 'RECON_UNMATCHED',
+  RECON_DISPUTED:  'RECON_DISPUTED',
+
+  // Sensitive admin
+  EXPORT_SENSITIVE: 'EXPORT_SENSITIVE',
+  FIELD_DECRYPTED:  'FIELD_DECRYPTED',
+
   // FCRA
   FCRA_RECEIPT_VERIFIED:      'FCRA_RECEIPT_VERIFIED',
   FCRA_UTILISATION_APPROVED:  'FCRA_UTILISATION_APPROVED',
@@ -92,6 +101,7 @@ const AUDIT_ACTIONS = {
  * @param {string} [params.module] - Source module
  * @param {Object} [params.metadata] - Additional context
  * @param {Object} [params.transaction] - Sequelize transaction
+ * @param {boolean} [params.critical=false] - When true, re-throws on failure so the calling transaction is aborted
  * @returns {Promise<string>} Audit log ID
  */
 async function logEvent({
@@ -109,6 +119,7 @@ async function logEvent({
   module: sourceModule = null,
   metadata = null,
   transaction,
+  critical = false,
 }) {
   const id = uuidv4();
 
@@ -152,8 +163,19 @@ async function logEvent({
 
     return id;
   } catch (err) {
-    // Audit logging must never break the main flow
-    logger.error('Audit logging failed', {
+    if (critical) {
+      // Critical audit failure must block the transaction — re-throw so the caller aborts
+      logger.error('Critical audit logging failed — transaction aborted', {
+        error: err.message,
+        action,
+        entity,
+        entityId,
+        userId,
+      });
+      throw err;
+    }
+    // Non-critical: log a warning and continue without breaking the main flow
+    logger.warn('Audit logging failed (non-critical)', {
       error: err.message,
       action,
       entity,

@@ -2,6 +2,13 @@
 
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../../../config/database');
+const fieldEncryption = require('../../../shared/encryption/fieldEncryption');
+
+function decryptRow(instance) {
+  if (!instance) return;
+  if (instance.dataValues.account_number != null)
+    instance.dataValues.account_number = fieldEncryption.decryptIfPresent(instance.dataValues.account_number);
+}
 
 const FCRABankAccount = sequelize.define(
   'FCRABankAccount',
@@ -12,6 +19,7 @@ const FCRABankAccount = sequelize.define(
     registration_id: { type: DataTypes.UUID, allowNull: false },
     bank_name: { type: DataTypes.STRING(100), allowNull: false },
     branch_name: { type: DataTypes.STRING(100) },
+    // NOTE: column widened to TEXT in migration 010
     account_number: { type: DataTypes.STRING(30), allowNull: false },
     ifsc_code: { type: DataTypes.STRING(15) },
     account_type: {
@@ -42,6 +50,19 @@ const FCRABankAccount = sequelize.define(
       { fields: ['tenant_id', 'account_type'] },
       { fields: ['tenant_id', 'status'] },
     ],
+    hooks: {
+      beforeCreate: (instance) => {
+        instance.account_number = fieldEncryption.encryptIfPresent(instance.account_number);
+      },
+      beforeUpdate: (instance) => {
+        if (instance.changed('account_number'))
+          instance.account_number = fieldEncryption.encryptIfPresent(instance.account_number);
+      },
+      afterFind: (result) => {
+        if (Array.isArray(result)) result.forEach(decryptRow);
+        else decryptRow(result);
+      },
+    },
   }
 );
 

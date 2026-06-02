@@ -2,6 +2,13 @@
 
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../../../config/database');
+const fieldEncryption = require('../../../shared/encryption/fieldEncryption');
+
+function decryptRow(instance) {
+  if (!instance) return;
+  if (instance.dataValues.pan_number != null)
+    instance.dataValues.pan_number = fieldEncryption.decryptIfPresent(instance.dataValues.pan_number);
+}
 
 const FCRARegistration = sequelize.define(
   'FCRARegistration',
@@ -14,6 +21,7 @@ const FCRARegistration = sequelize.define(
       type: DataTypes.STRING(50),
       defaultValue: 'trust',
     },
+    // NOTE: column widened to TEXT in migration 010
     pan_number: { type: DataTypes.STRING(10) },
     registration_date: { type: DataTypes.DATEONLY, allowNull: false },
     valid_upto: { type: DataTypes.DATEONLY },
@@ -41,6 +49,19 @@ const FCRARegistration = sequelize.define(
       { unique: true, fields: ['tenant_id', 'fcra_number'] },
       { fields: ['tenant_id', 'status'] },
     ],
+    hooks: {
+      beforeCreate: (instance) => {
+        instance.pan_number = fieldEncryption.encryptIfPresent(instance.pan_number);
+      },
+      beforeUpdate: (instance) => {
+        if (instance.changed('pan_number'))
+          instance.pan_number = fieldEncryption.encryptIfPresent(instance.pan_number);
+      },
+      afterFind: (result) => {
+        if (Array.isArray(result)) result.forEach(decryptRow);
+        else decryptRow(result);
+      },
+    },
   }
 );
 

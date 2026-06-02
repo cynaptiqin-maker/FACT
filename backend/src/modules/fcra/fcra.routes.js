@@ -69,9 +69,9 @@ const FCRA_ACTION_MAP = {
   submit:    AUDIT_ACTIONS.FCRA_FC4_SUBMITTED,
 };
 
-function auditLog(tenantId, userId, entityType, entityId, action, oldValues, newValues, req) {
+async function auditLog(tenantId, userId, entityType, entityId, action, oldValues, newValues, req, critical = false) {
   // Write to FCRA-specific audit table (keeps FCRA registration_id linkage, etc.)
-  FCRAAuditLog.create({
+  const fcraWrite = FCRAAuditLog.create({
     id: uuidv4(),
     tenant_id: tenantId,
     entity_type: entityType,
@@ -81,11 +81,11 @@ function auditLog(tenantId, userId, entityType, entityId, action, oldValues, new
     new_values: newValues,
     performed_by: userId,
     ip_address: req.ip,
-  }).catch(() => {});
+  });
 
   // Fan-out: also write to central audit_logs so FCRA events appear in unified timeline
   const centralAction = FCRA_ACTION_MAP[action] || AUDIT_ACTIONS.UPDATE;
-  logEvent({
+  const centralWrite = logEvent({
     tenantId,
     userId,
     userEmail: req.user?.email || null,
@@ -97,7 +97,18 @@ function auditLog(tenantId, userId, entityType, entityId, action, oldValues, new
     after:     newValues,
     ipAddress: req.ip,
     module:    'fcra',
-  }).catch(() => {});
+    critical,
+  });
+
+  if (critical) {
+    // Await both writes — any failure propagates to the caller and aborts the transaction
+    await fcraWrite;
+    await centralWrite;
+  } else {
+    // Non-critical: fire-and-forget, swallow errors so main flow continues
+    fcraWrite.catch(() => {});
+    centralWrite.catch(() => {});
+  }
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -425,7 +436,7 @@ router.post('/receipts/:id/verify', requirePermission('fcra:approve'), asyncHand
   const r = await FCRAReceipt.findOne({ where: { id: req.params.id, tenant_id: req.tenantId } });
   if (!r) return res.status(404).json({ message: 'Receipt not found' });
   await r.update({ status: 'verified', verified_by: req.user.id, verified_at: new Date() });
-  auditLog(req.tenantId, req.user.id, 'receipt', r.id, 'verify', null, null, req);
+  await auditLog(req.tenantId, req.user.id, 'receipt', r.id, 'verify', null, null, req, true);
 
   // Post DR/CR journal (non-blocking)
   const journal = await fcraAccounting.postReceiptVerified(req.tenantId, r.toJSON(), req.user.id);
@@ -637,7 +648,7 @@ router.post('/utilisation/:id/approve', requirePermission('fcra:approve'), async
       await FCRAProject.increment('utilized_amount', { by: parseFloat(util.amount), where: { id: util.project_id, tenant_id: req.tenantId } });
       await FCRAProject.increment('admin_utilized',  { by: parseFloat(util.amount), where: { id: util.project_id, tenant_id: req.tenantId } });
     }
-    auditLog(req.tenantId, req.user.id, 'utilisation', util.id, 'approve', null, null, req);
+    await auditLog(req.tenantId, req.user.id, 'utilisation', util.id, 'approve', null, null, req, true);
 
     const journal = await fcraAccounting.postUtilisationApproved(req.tenantId, util.toJSON(), req.user.id);
     return res.json({ data: util, message: 'Voucher approved', ...(warning ? { warning } : {}), journal: journal ? { entry_number: journal.entry_number } : null });
@@ -648,7 +659,7 @@ router.post('/utilisation/:id/approve', requirePermission('fcra:approve'), async
   if (util.project_id) {
     await FCRAProject.increment('utilized_amount', { by: parseFloat(util.amount), where: { id: util.project_id, tenant_id: req.tenantId } });
   }
-  auditLog(req.tenantId, req.user.id, 'utilisation', util.id, 'approve', null, null, req);
+  await auditLog(req.tenantId, req.user.id, 'utilisation', util.id, 'approve', null, null, req, true);
 
   const journal = await fcraAccounting.postUtilisationApproved(req.tenantId, util.toJSON(), req.user.id);
   res.json({ data: util, message: 'Voucher approved', journal: journal ? { entry_number: journal.entry_number } : null });
@@ -658,7 +669,7 @@ router.post('/utilisation/:id/reject', requirePermission('fcra:approve'), asyncH
   const util = await FCRAUtilisation.findOne({ where: { id: req.params.id, tenant_id: req.tenantId } });
   if (!util) return res.status(404).json({ message: 'Utilisation voucher not found' });
   await util.update({ status: 'rejected', rejection_reason: req.body.reason });
-  auditLog(req.tenantId, req.user.id, 'utilisation', util.id, 'reject', null, null, req);
+  await auditLog(req.tenantId, req.user.id, 'utilisation', util.id, 'reject', null, null, req, true);
   res.json({ data: util, message: 'Voucher rejected' });
 }));
 

@@ -8,7 +8,7 @@
  *   - Pre-posting checks     (PrePostValidator)
  *   - Fund-type enforcement  (FundTypeValidator)
  *   - Double-entry posting   (accountingEngine)
- *   - Audit logging          (auditLogger, non-blocking)
+ *   - Audit logging          (auditLogger, critical — aborts post on failure)
  *   - Enriched result with reconStatus and postingEvent
  *
  * Usage:
@@ -100,33 +100,23 @@ class SharedPostingEngine {
       reconStatus:        RECON_STATUSES.UNMATCHED,
     });
 
-    // ── Step 6: Audit logging (non-blocking — never lets audit failure block post) ──
-    try {
-      await this.auditLogger.logEvent({
-        tenantId:  contract.tenantId,
-        userId:    contract.postedBy,
-        action:    AUDIT_ACTIONS.JOURNAL_POSTED,
-        entity:    contract.sourceModule,
-        entityId:  contract.sourceId,
-        module:    contract.sourceModule,
-        metadata: {
-          entryNumber:        result.entryNumber,
-          fundType:           contract.fundType,
-          postingEvent:       contract.postingEvent,
-          postingExplanation: contract.postingExplanation,
-          idempotencyKey,
-        },
-      });
-    } catch (auditErr) {
-      // Audit failure is non-fatal: log the warning and continue
-      this.logger.warn
-        ? this.logger.warn('SharedPostingEngine: audit logging failed (non-fatal)', {
-            error:   auditErr.message,
-            sourceModule: contract.sourceModule,
-            sourceId:     contract.sourceId,
-          })
-        : this.logger.warn(`SharedPostingEngine: audit logging failed (non-fatal): ${auditErr.message}`);
-    }
+    // ── Step 6: Audit logging (critical — audit failure aborts the post) ──────
+    await this.auditLogger.logEvent({
+      tenantId:  contract.tenantId,
+      userId:    contract.postedBy,
+      action:    AUDIT_ACTIONS.JOURNAL_POSTED,
+      entity:    contract.sourceModule,
+      entityId:  contract.sourceId,
+      module:    contract.sourceModule,
+      critical:  true,
+      metadata: {
+        entryNumber:        result.entryNumber,
+        fundType:           contract.fundType,
+        postingEvent:       contract.postingEvent,
+        postingExplanation: contract.postingExplanation,
+        idempotencyKey,
+      },
+    });
 
     // ── Step 7: Return enriched result ────────────────────────────────────────
     return {

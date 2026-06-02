@@ -2,6 +2,13 @@
 
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../../../config/database');
+const fieldEncryption = require('../../../shared/encryption/fieldEncryption');
+
+function decryptRow(instance) {
+  if (!instance) return;
+  if (instance.dataValues.bank_account_number != null)
+    instance.dataValues.bank_account_number = fieldEncryption.decryptIfPresent(instance.dataValues.bank_account_number);
+}
 
 /**
  * Account — Chart of Accounts
@@ -145,6 +152,7 @@ const Account = sequelize.define(
     bank_name: {
       type: DataTypes.STRING(100),
     },
+    // NOTE: column widened to TEXT in migration 010
     bank_account_number: {
       type: DataTypes.STRING(50),
     },
@@ -194,6 +202,15 @@ const Account = sequelize.define(
           INCOME: 'CREDIT',
         };
         account.normal_balance = normalBalanceMap[account.type] || 'DEBIT';
+        account.bank_account_number = fieldEncryption.encryptIfPresent(account.bank_account_number);
+      },
+      beforeUpdate: (account) => {
+        if (account.changed('bank_account_number'))
+          account.bank_account_number = fieldEncryption.encryptIfPresent(account.bank_account_number);
+      },
+      afterFind: (result) => {
+        if (Array.isArray(result)) result.forEach(decryptRow);
+        else decryptRow(result);
       },
     },
   }
