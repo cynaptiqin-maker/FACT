@@ -74,9 +74,11 @@ queryClient.setDefaultOptions({
 // ─── Provider ──────────────────────────────────────────────────────────────────
 
 export function ReliabilityProvider({ children }) {
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  // Always start online — the offline event will correct if truly disconnected
+  const [isOnline, setIsOnline] = useState(true);
   const [globalLoading, setGlobalLoading] = useState(false);
   const loadingCountRef = useRef(0);
+  const offlineTimerRef = useRef(null);
 
   // Submission lock to prevent double-clicks
   const submissionLocks = useRef(new Map());
@@ -84,20 +86,37 @@ export function ReliabilityProvider({ children }) {
   // ── Network status monitoring ──────────────────────────────────────────────
 
   useEffect(() => {
-    const handleOnline = () => {
+    const goOnline = () => {
+      if (offlineTimerRef.current) {
+        clearTimeout(offlineTimerRef.current);
+        offlineTimerRef.current = null;
+      }
       setIsOnline(true);
       toast.dismiss('offline-toast');
-      toast.success('Connection restored', { icon: '🌐', duration: 2000 });
       queryClient.invalidateQueries();
     };
 
+    const handleOnline = () => {
+      goOnline();
+      toast.success('Connection restored', { icon: '🌐', duration: 2000 });
+    };
+
+    // Debounce offline — only mark offline after 4 seconds of sustained disconnect
+    // This prevents false positives from Docker restarts / HMR reconnects
     const handleOffline = () => {
-      setIsOnline(false);
-      toast.error('You are offline. Changes will resume when connection is restored.', {
-        id: 'offline-toast',
-        duration: Infinity,
-        icon: '⚠️',
-      });
+      offlineTimerRef.current = setTimeout(() => {
+        // Verify we're truly offline before showing the banner
+        fetch('/api/health', { method: 'HEAD', cache: 'no-store' })
+          .then(goOnline)
+          .catch(() => {
+            setIsOnline(false);
+            toast.error('You are offline. Changes will resume when connection is restored.', {
+              id: 'offline-toast',
+              duration: Infinity,
+              icon: '⚠️',
+            });
+          });
+      }, 4000);
     };
 
     window.addEventListener('online', handleOnline);
@@ -105,6 +124,7 @@ export function ReliabilityProvider({ children }) {
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      if (offlineTimerRef.current) clearTimeout(offlineTimerRef.current);
     };
   }, []);
 
