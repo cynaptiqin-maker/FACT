@@ -137,23 +137,26 @@ router.post('/match', requirePermission('accounting:write'), asyncHandler(async 
 
   if (!journalEntryId) return res.status(400).json({ error: 'journalEntryId required' });
 
-  await sequelize.query(
-    `UPDATE journal_entries
-     SET recon_status = 'MATCHED', updated_at = NOW()
-     WHERE id = :journalEntryId AND tenant_id = :tenantId`,
-    { replacements: { journalEntryId, tenantId } }
-  );
+  await sequelize.transaction(async (t) => {
+    await sequelize.query(
+      `UPDATE journal_entries
+       SET recon_status = 'MATCHED', updated_at = NOW()
+       WHERE id = :journalEntryId AND tenant_id = :tenantId`,
+      { replacements: { journalEntryId, tenantId }, transaction: t }
+    );
 
-  await logEvent({
-    tenantId,
-    userId: req.user.id,
-    userEmail: req.user.email,
-    action: AUDIT_ACTIONS.RECON_MATCHED,
-    entity: 'JournalEntry',
-    entityId: journalEntryId,
-    module: 'reconciliation',
-    metadata: { reconType, sourceId, priorStatus: 'UNMATCHED', newStatus: 'MATCHED' },
-    critical: true,
+    await logEvent({
+      tenantId,
+      userId: req.user.id,
+      userEmail: req.user.email,
+      action: AUDIT_ACTIONS.RECON_MATCHED,
+      entity: 'JournalEntry',
+      entityId: journalEntryId,
+      module: 'reconciliation',
+      metadata: { reconType, sourceId, priorStatus: 'UNMATCHED', newStatus: 'MATCHED' },
+      critical: true,
+      transaction: t,
+    });
   });
 
   res.json({ success: true, journalEntryId, reconStatus: 'MATCHED' });
@@ -165,23 +168,26 @@ router.post('/unmatch', requirePermission('accounting:write'), asyncHandler(asyn
   const { journalEntryId } = req.body;
   const { tenantId } = req;
 
-  await sequelize.query(
-    `UPDATE journal_entries
-     SET recon_status = 'UNMATCHED', updated_at = NOW()
-     WHERE id = :journalEntryId AND tenant_id = :tenantId`,
-    { replacements: { journalEntryId, tenantId } }
-  );
+  await sequelize.transaction(async (t) => {
+    await sequelize.query(
+      `UPDATE journal_entries
+       SET recon_status = 'UNMATCHED', updated_at = NOW()
+       WHERE id = :journalEntryId AND tenant_id = :tenantId`,
+      { replacements: { journalEntryId, tenantId }, transaction: t }
+    );
 
-  await logEvent({
-    tenantId,
-    userId: req.user.id,
-    userEmail: req.user.email,
-    action: AUDIT_ACTIONS.RECON_UNMATCHED,
-    entity: 'JournalEntry',
-    entityId: journalEntryId,
-    module: 'reconciliation',
-    metadata: { priorStatus: 'MATCHED', newStatus: 'UNMATCHED' },
-    critical: true,
+    await logEvent({
+      tenantId,
+      userId: req.user.id,
+      userEmail: req.user.email,
+      action: AUDIT_ACTIONS.RECON_UNMATCHED,
+      entity: 'JournalEntry',
+      entityId: journalEntryId,
+      module: 'reconciliation',
+      metadata: { priorStatus: 'MATCHED', newStatus: 'UNMATCHED' },
+      critical: true,
+      transaction: t,
+    });
   });
 
   res.json({ success: true, journalEntryId, reconStatus: 'UNMATCHED' });
@@ -193,23 +199,26 @@ router.post('/dispute', requirePermission('accounting:write'), asyncHandler(asyn
   const { journalEntryId, reason } = req.body;
   const { tenantId } = req;
 
-  await sequelize.query(
-    `UPDATE journal_entries
-     SET recon_status = 'DISPUTED', updated_at = NOW()
-     WHERE id = :journalEntryId AND tenant_id = :tenantId`,
-    { replacements: { journalEntryId, tenantId } }
-  );
+  await sequelize.transaction(async (t) => {
+    await sequelize.query(
+      `UPDATE journal_entries
+       SET recon_status = 'DISPUTED', updated_at = NOW()
+       WHERE id = :journalEntryId AND tenant_id = :tenantId`,
+      { replacements: { journalEntryId, tenantId }, transaction: t }
+    );
 
-  await logEvent({
-    tenantId,
-    userId: req.user.id,
-    userEmail: req.user.email,
-    action: AUDIT_ACTIONS.RECON_DISPUTED,
-    entity: 'JournalEntry',
-    entityId: journalEntryId,
-    module: 'reconciliation',
-    metadata: { reason, priorStatus: 'UNMATCHED', newStatus: 'DISPUTED' },
-    critical: true,
+    await logEvent({
+      tenantId,
+      userId: req.user.id,
+      userEmail: req.user.email,
+      action: AUDIT_ACTIONS.RECON_DISPUTED,
+      entity: 'JournalEntry',
+      entityId: journalEntryId,
+      module: 'reconciliation',
+      metadata: { reason, priorStatus: 'UNMATCHED', newStatus: 'DISPUTED' },
+      critical: true,
+      transaction: t,
+    });
   });
 
   // Raise exception for disputed items

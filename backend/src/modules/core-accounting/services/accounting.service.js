@@ -2,6 +2,7 @@
 
 const { sequelize } = require('../../../config/database');
 const accountingEngine = require('../../../shared/accounting-engine');
+const fieldEncryption = require('../../shared/encryption/fieldEncryption');
 const { logEvent, AUDIT_ACTIONS } = require('../../../shared/audit/auditLogger');
 const { eventBus } = require('../../../shared/events/eventBus');
 const { EVENT_TYPES } = require('../../../shared/events/eventTypes');
@@ -87,7 +88,7 @@ async function createAccount(data, userId) {
         tdsApplicable: rest.tdsApplicable || false,
         defaultTaxCode: rest.defaultTaxCode || null,
         bankName: rest.bankName || null,
-        bankAccountNumber: rest.bankAccountNumber || null,
+        bankAccountNumber: rest.bankAccountNumber ? fieldEncryption.encryptIfPresent(rest.bankAccountNumber) : null,
         bankIfsc: rest.bankIfsc || null,
         tags: JSON.stringify(rest.tags || []),
         metadata: JSON.stringify(rest.metadata || {}),

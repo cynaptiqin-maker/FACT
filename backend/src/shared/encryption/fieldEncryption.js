@@ -20,6 +20,13 @@ const DEV_DUMMY  = '0'.repeat(64);
 function resolveKey() {
   const raw = process.env.FIELD_ENCRYPTION_KEY;
   if (!raw || raw.trim() === '') {
+    const env = process.env.NODE_ENV;
+    if (env && env !== 'development' && env !== 'test') {
+      throw new Error(
+        '[fieldEncryption] FATAL: FIELD_ENCRYPTION_KEY must be set in production. ' +
+        'Generate one with: openssl rand -hex 32'
+      );
+    }
     console.warn(
       '[fieldEncryption] WARNING: FIELD_ENCRYPTION_KEY is not set. ' +
       'Using dev-only dummy key — DO NOT use in production. ' +

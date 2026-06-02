@@ -69,7 +69,7 @@ const FCRA_ACTION_MAP = {
   submit:    AUDIT_ACTIONS.FCRA_FC4_SUBMITTED,
 };
 
-async function auditLog(tenantId, userId, entityType, entityId, action, oldValues, newValues, req, critical = false) {
+async function auditLog(tenantId, userId, entityType, entityId, action, oldValues, newValues, req, critical = false, transaction = null) {
   // Write to FCRA-specific audit table (keeps FCRA registration_id linkage, etc.)
   const fcraWrite = FCRAAuditLog.create({
     id: uuidv4(),
@@ -81,7 +81,7 @@ async function auditLog(tenantId, userId, entityType, entityId, action, oldValue
     new_values: newValues,
     performed_by: userId,
     ip_address: req.ip,
-  });
+  }, { transaction });
 
   // Fan-out: also write to central audit_logs so FCRA events appear in unified timeline
   const centralAction = FCRA_ACTION_MAP[action] || AUDIT_ACTIONS.UPDATE;
@@ -98,6 +98,7 @@ async function auditLog(tenantId, userId, entityType, entityId, action, oldValue
     ipAddress: req.ip,
     module:    'fcra',
     critical,
+    transaction,
   });
 
   if (critical) {
@@ -435,10 +436,13 @@ router.put('/receipts/:id', requirePermission('fcra:write'), asyncHandler(async 
 router.post('/receipts/:id/verify', requirePermission('fcra:approve'), asyncHandler(async (req, res) => {
   const r = await FCRAReceipt.findOne({ where: { id: req.params.id, tenant_id: req.tenantId } });
   if (!r) return res.status(404).json({ message: 'Receipt not found' });
-  await r.update({ status: 'verified', verified_by: req.user.id, verified_at: new Date() });
-  await auditLog(req.tenantId, req.user.id, 'receipt', r.id, 'verify', null, null, req, true);
 
-  // Post DR/CR journal (non-blocking)
+  await sequelize.transaction(async (t) => {
+    await r.update({ status: 'verified', verified_by: req.user.id, verified_at: new Date() }, { transaction: t });
+    await auditLog(req.tenantId, req.user.id, 'receipt', r.id, 'verify', null, null, req, true, t);
+  });
+
+  // Post DR/CR journal (non-blocking, outside transaction so a journal failure does not revert the verification)
   const journal = await fcraAccounting.postReceiptVerified(req.tenantId, r.toJSON(), req.user.id);
 
   res.json({ data: r, message: 'Receipt verified', journal: journal ? { entry_number: journal.entry_number } : null });
@@ -642,24 +646,29 @@ router.post('/utilisation/:id/approve', requirePermission('fcra:approve'), async
         ? { level: 'warn', pct: newAdminPct }
         : null;
 
-    await util.update({ status: 'approved', approved_by: req.user.id, approved_at: new Date() });
+    await sequelize.transaction(async (t) => {
+      await util.update({ status: 'approved', approved_by: req.user.id, approved_at: new Date() }, { transaction: t });
+      await auditLog(req.tenantId, req.user.id, 'utilisation', util.id, 'approve', null, null, req, true, t);
+    });
 
     if (util.project_id) {
       await FCRAProject.increment('utilized_amount', { by: parseFloat(util.amount), where: { id: util.project_id, tenant_id: req.tenantId } });
       await FCRAProject.increment('admin_utilized',  { by: parseFloat(util.amount), where: { id: util.project_id, tenant_id: req.tenantId } });
     }
-    await auditLog(req.tenantId, req.user.id, 'utilisation', util.id, 'approve', null, null, req, true);
 
     const journal = await fcraAccounting.postUtilisationApproved(req.tenantId, util.toJSON(), req.user.id);
     return res.json({ data: util, message: 'Voucher approved', ...(warning ? { warning } : {}), journal: journal ? { entry_number: journal.entry_number } : null });
   }
 
   // Non-admin category
-  await util.update({ status: 'approved', approved_by: req.user.id, approved_at: new Date() });
+  await sequelize.transaction(async (t) => {
+    await util.update({ status: 'approved', approved_by: req.user.id, approved_at: new Date() }, { transaction: t });
+    await auditLog(req.tenantId, req.user.id, 'utilisation', util.id, 'approve', null, null, req, true, t);
+  });
+
   if (util.project_id) {
     await FCRAProject.increment('utilized_amount', { by: parseFloat(util.amount), where: { id: util.project_id, tenant_id: req.tenantId } });
   }
-  await auditLog(req.tenantId, req.user.id, 'utilisation', util.id, 'approve', null, null, req, true);
 
   const journal = await fcraAccounting.postUtilisationApproved(req.tenantId, util.toJSON(), req.user.id);
   res.json({ data: util, message: 'Voucher approved', journal: journal ? { entry_number: journal.entry_number } : null });
@@ -668,8 +677,12 @@ router.post('/utilisation/:id/approve', requirePermission('fcra:approve'), async
 router.post('/utilisation/:id/reject', requirePermission('fcra:approve'), asyncHandler(async (req, res) => {
   const util = await FCRAUtilisation.findOne({ where: { id: req.params.id, tenant_id: req.tenantId } });
   if (!util) return res.status(404).json({ message: 'Utilisation voucher not found' });
-  await util.update({ status: 'rejected', rejection_reason: req.body.reason });
-  await auditLog(req.tenantId, req.user.id, 'utilisation', util.id, 'reject', null, null, req, true);
+
+  await sequelize.transaction(async (t) => {
+    await util.update({ status: 'rejected', rejected_by: req.user.id, rejected_at: new Date(), rejection_reason: req.body.reason }, { transaction: t });
+    await auditLog(req.tenantId, req.user.id, 'utilisation', util.id, 'reject', null, null, req, true, t);
+  });
+
   res.json({ data: util, message: 'Voucher rejected' });
 }));
 
