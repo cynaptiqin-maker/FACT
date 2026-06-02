@@ -81,7 +81,7 @@ async function login({ email, password, mfaToken, tenantId, ipAddress, userAgent
   // Verify MFA if enabled
   if (user.mfa_enabled) {
     if (!mfaToken) {
-      return { requiresMFA: true, message: 'MFA token required.' };
+      return { requiresMFA: true, message: 'MFA token required.', userId: user.id };
     }
 
     const mfaValid = verifyMFAToken(user.mfa_secret, mfaToken) ||

@@ -14,6 +14,7 @@ import LedgerTable from './Ledger/LedgerTable';
 import LedgerDetailDrawer from './Ledger/LedgerDetailDrawer';
 import LedgerCreateModal from './Ledger/LedgerCreateModal';
 import CsvImportModal from '@components/shared/CsvImportModal';
+import ConfirmModal from '@components/shared/ConfirmModal';
 
 // ─── Toolbar button ───────────────────────────────────────────────────────────
 function Btn({ icon: Icon, label, onClick, primary, ai, subtle }) {
@@ -62,6 +63,7 @@ export default function LedgerManagement() {
   const [editingLedger, setEditingLedger] = useState(null);
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [showImport, setShowImport] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   // ── Data ───────────────────────────────────────────────────────────────────
   const { data: raw, isLoading, isFetching, refetch } = useQuery({
@@ -139,7 +141,10 @@ export default function LedgerManagement() {
 
   // ── Delete ─────────────────────────────────────────────────────────────────
   const handleDelete = useCallback((account) => {
-    if (!confirm(`Delete ledger "${account.name}"? This cannot be undone.`)) return;
+    setConfirmDelete(account);
+  }, []);
+
+  const executeDelete = useCallback((account) => {
     accountingAPI.updateAccount(account.id, { is_active: false })
       .then(() => {
         queryClient.invalidateQueries({ queryKey: ['ledger-management'] });
@@ -284,6 +289,16 @@ export default function LedgerManagement() {
           queryClient.invalidateQueries({ queryKey: ['ledger-management'] });
           return res.data.data;
         }}
+      />
+
+      <ConfirmModal
+        open={Boolean(confirmDelete)}
+        title="Deactivate Ledger"
+        message={confirmDelete ? `Deactivate ledger "${confirmDelete.name}"? This cannot be undone.` : ''}
+        confirmLabel="Deactivate"
+        danger
+        onConfirm={() => { executeDelete(confirmDelete); setConfirmDelete(null); }}
+        onCancel={() => setConfirmDelete(null)}
       />
     </div>
   );

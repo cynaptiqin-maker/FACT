@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingDown, Plus, Edit2, X, Save, CheckCircle, XCircle, Filter, BookOpen } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { fcraAPI } from '@services/api';
 
 function fmtINR(n) {
@@ -240,6 +241,8 @@ export default function FCRAUtilisation() {
   const [catFilter, setCatFilter] = useState('all');
   const [page, setPage] = useState(1);
   const LIMIT = 25;
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   async function load(p = page) {
     setLoading(true);
@@ -266,12 +269,22 @@ export default function FCRAUtilisation() {
   useEffect(() => { load(page); }, [page]);
 
   async function approve(id) {
-    try { await fcraAPI.approveUtilisation(id); load(); } catch (e) { alert(e.response?.data?.message || 'Error'); }
+    try { await fcraAPI.approveUtilisation(id); load(); } catch (e) { toast.error(e.response?.data?.message || 'Error'); }
   }
-  async function reject(id) {
-    const reason = prompt('Rejection reason:');
-    if (!reason) return;
-    try { await fcraAPI.rejectUtilisation(id, { reason }); load(); } catch (e) { alert(e.response?.data?.message || 'Error'); }
+
+  function openReject(id) {
+    setRejectReason('');
+    setRejectTarget(id);
+  }
+
+  async function submitReject() {
+    if (!rejectReason.trim()) return;
+    try {
+      await fcraAPI.rejectUtilisation(rejectTarget, { reason: rejectReason });
+      setRejectTarget(null);
+      setRejectReason('');
+      load();
+    } catch (e) { toast.error(e.response?.data?.message || 'Error'); }
   }
 
   const totalApproved = rows.filter(r => r.status === 'approved').reduce((s, r) => s + parseFloat(r.amount || 0), 0);
@@ -359,7 +372,7 @@ export default function FCRAUtilisation() {
                               <button onClick={() => approve(r.id)} className="text-green-600 hover:text-green-800" title="Approve">
                                 <CheckCircle size={14} />
                               </button>
-                              <button onClick={() => reject(r.id)} className="text-red-500 hover:text-red-700" title="Reject">
+                              <button onClick={() => openReject(r.id)} className="text-red-500 hover:text-red-700" title="Reject">
                                 <XCircle size={14} />
                               </button>
                               <button onClick={() => setDrawer(r)} className="text-gray-400 hover:text-green-600">
@@ -407,6 +420,43 @@ export default function FCRAUtilisation() {
           </>
         )}
       </AnimatePresence>
+
+      {/* ── Reject reason dialog ─────────────────────────────────────────────── */}
+      {rejectTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setRejectTarget(null)} />
+          <div className="relative z-10 w-full max-w-sm bg-white rounded-xl shadow-xl p-6 space-y-4">
+            <h2 className="text-base font-bold text-slate-800">Reject Voucher</h2>
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Rejection reason *</label>
+              <textarea
+                value={rejectReason}
+                onChange={e => setRejectReason(e.target.value)}
+                rows={3}
+                placeholder="Enter reason for rejection…"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-red-400 resize-none"
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setRejectTarget(null)}
+                className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitReject}
+                disabled={!rejectReason.trim()}
+                className="px-4 py-2 text-sm font-semibold rounded-lg text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -18,6 +18,7 @@ import FYTable       from './FiscalYears/FYTable';
 import FYDetailPanel from './FiscalYears/FYDetailPanel';
 import FYCreateModal from './FiscalYears/FYCreateModal';
 import FYYearEndModal from './FiscalYears/FYYearEndModal';
+import ConfirmModal from '@components/shared/ConfirmModal';
 
 // ─── Toolbar button ───────────────────────────────────────────────────────────
 function Btn({ icon: Icon, label, onClick, primary, warning }) {
@@ -85,6 +86,7 @@ export default function FiscalYears() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editingFY, setEditingFY]   = useState(null);
   const [yearEndFY, setYearEndFY]   = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
 
   // ── Sorting ────────────────────────────────────────────────────────────────
   const [sort, setSort] = useState({ key: 'start_date', dir: 'desc' });
@@ -129,13 +131,15 @@ export default function FiscalYears() {
   });
 
   const handleClose = useCallback((fy) => {
-    if (!confirm(`Close "${fyLabel(fy)}"? This will prevent new journal entries.`)) return;
-    closeMutation.mutate(fy.id);
-  }, [closeMutation, fiscalYears]);
+    setConfirmAction({ type: 'close', fy });
+  }, []);
 
   const handleLock = useCallback((fy, lock) => {
-    if (lock && !confirm(`Lock "${fyLabel(fy)}"? This is a permanent action that requires CFO approval to reverse.`)) return;
-    toast.success(lock ? `${fyLabel(fy)} locked` : `${fyLabel(fy)} unlock request submitted for approval`);
+    if (lock) {
+      setConfirmAction({ type: 'lock', fy, lock });
+    } else {
+      toast.success(`${fyLabel(fy)} unlock request submitted for approval`);
+    }
   }, []);
 
   const handleArchive = useCallback((fy) => {
@@ -274,6 +278,34 @@ export default function FiscalYears() {
         open={!!yearEndFY}
         fy={yearEndFY}
         onClose={() => setYearEndFY(null)}
+      />
+
+      {/* ── Confirm modal (close / lock) ─────────────────────────────────────── */}
+      <ConfirmModal
+        open={Boolean(confirmAction)}
+        title={
+          confirmAction?.type === 'close' ? 'Close Fiscal Year'
+          : confirmAction?.type === 'lock' ? 'Lock Fiscal Year'
+          : ''
+        }
+        message={
+          confirmAction?.type === 'close'
+            ? `Close "${fyLabel(confirmAction.fy)}"? This will prevent new journal entries.`
+            : confirmAction?.type === 'lock'
+            ? `Lock "${fyLabel(confirmAction.fy)}"? This is a permanent action that requires CFO approval to reverse.`
+            : ''
+        }
+        confirmLabel={confirmAction?.type === 'close' ? 'Close' : 'Lock'}
+        danger
+        onConfirm={() => {
+          if (confirmAction?.type === 'close') {
+            closeMutation.mutate(confirmAction.fy.id);
+          } else if (confirmAction?.type === 'lock') {
+            toast.success(`${fyLabel(confirmAction.fy)} locked`);
+          }
+          setConfirmAction(null);
+        }}
+        onCancel={() => setConfirmAction(null)}
       />
     </div>
   );

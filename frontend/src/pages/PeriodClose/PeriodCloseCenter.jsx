@@ -1,6 +1,7 @@
 // ─── Period Close Center — Enterprise Healthcare FinOS ───────────────────────
 // Violet/Purple + Emerald theme · Checklist-driven · AI-assisted · Audit-ready
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -816,6 +817,7 @@ function ActionPanel({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function PeriodCloseCenter() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [selectedFY,  setSelectedFY]  = useState(FISCAL_YEARS[0]);
   const [selectedPeriod, setSelectedPeriod] = useState('2026-03');
@@ -924,8 +926,8 @@ export default function PeriodCloseCenter() {
   }, []);
 
   const handleQuickAction = useCallback((path) => {
-    window.location.href = path;
-  }, []);
+    navigate(path);
+  }, [navigate]);
 
   const handleAISubmit = useCallback(() => {
     if (!aiInput.trim()) return;

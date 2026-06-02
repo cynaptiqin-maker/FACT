@@ -2,7 +2,9 @@
 
 const Joi = require('joi');
 const { login, refreshAccessToken, logout, changePassword, createUser } = require('./auth.service');
-const { generateMFASecret, enableMFA, disableMFA } = require('./mfa.service');
+const { generateMFASecret, enableMFA, disableMFA, verifyMFAToken } = require('./mfa.service');
+const { sequelize } = require('../../config/database');
+const { generateAccessToken, generateRefreshToken } = require('../../middleware/auth');
 const bcrypt = require('bcryptjs');
 
 // ─── Validators ───────────────────────────────────────────────────────────────
@@ -39,7 +41,11 @@ async function loginController(req, res) {
   });
 
   if (result.requiresMFA) {
-    return res.status(200).json({ success: true, requiresMFA: true, message: result.message });
+    return res.status(200).json({
+      success: true,
+      data: { mfaRequired: true, userId: result.userId },
+      message: result.message,
+    });
   }
 
   res.json({ success: true, data: result });
@@ -138,6 +144,62 @@ async function createUserController(req, res) {
   res.status(201).json({ success: true, data: user });
 }
 
+async function mfaVerifyLoginController(req, res) {
+  const { userId, token, isBackupCode } = req.body;
+  if (!userId || !token) {
+    return res.status(400).json({ success: false, error: 'userId and token are required.' });
+  }
+
+  const [user] = await sequelize.query(
+    `SELECT u.*, array_agg(DISTINCT r.name) as roles
+     FROM users u
+     LEFT JOIN user_roles ur ON ur.user_id = u.id
+     LEFT JOIN roles r ON r.id = ur.role_id
+     WHERE u.id = :userId AND u.tenant_id = :tenantId AND u.is_active = true
+     GROUP BY u.id`,
+    { replacements: { userId, tenantId: req.tenantId }, type: sequelize.QueryTypes.SELECT }
+  );
+
+  if (!user || !user.mfa_enabled || !user.mfa_secret) {
+    return res.status(401).json({ success: false, error: 'Invalid MFA verification request.' });
+  }
+
+  const { verifyBackupCode } = require('./mfa.service');
+  const mfaValid = isBackupCode
+    ? await verifyBackupCode(user.id, req.tenantId, token)
+    : verifyMFAToken(user.mfa_secret, token);
+
+  if (!mfaValid) {
+    return res.status(401).json({ success: false, error: 'Invalid MFA token.' });
+  }
+
+  const tokenPayload = {
+    sub: user.id,
+    email: user.email,
+    tenantId: user.tenant_id,
+    roles: (user.roles || []).filter(Boolean),
+  };
+
+  const accessToken = generateAccessToken(tokenPayload);
+  const refreshToken = generateRefreshToken(tokenPayload);
+
+  res.json({
+    success: true,
+    data: {
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        roles: tokenPayload.roles,
+        tenantId: user.tenant_id,
+        mfaEnabled: user.mfa_enabled,
+      },
+    },
+  });
+}
+
 module.exports = {
   loginController,
   refreshController,
@@ -148,4 +210,6 @@ module.exports = {
   verifyMFASetupController,
   disableMFAController,
   createUserController,
+  mfaVerifyLoginController,
+  mfaEnableController: verifyMFASetupController,
 };

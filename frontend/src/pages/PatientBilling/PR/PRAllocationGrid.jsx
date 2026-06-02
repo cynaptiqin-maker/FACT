@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Zap, X, ChevronDown, ChevronRight, ExternalLink, BookOpen, GitBranch, FileSearch } from 'lucide-react';
 import { fmtINR, fmtDate, INV_STATUSES } from './PRConstants';
@@ -30,6 +31,7 @@ function AllocInput({ value, onChange, max }) {
 }
 
 function ExpandedRow({ inv, alloc }) {
+  const navigate = useNavigate();
   return (
     <tr>
       <td colSpan={10} className="px-4 pb-4 bg-emerald-50/40 dark:bg-emerald-900/5 border-b border-slate-100 dark:border-slate-800">
@@ -80,13 +82,14 @@ function ExpandedRow({ inv, alloc }) {
           <div>
             <p className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wide mb-2">Linked Modules</p>
             {[
-              { icon: ExternalLink, label: 'Open Invoice →',          href: '#' },
-              { icon: BookOpen,    label: 'View GL Posting →',        href: '#' },
-              { icon: GitBranch,   label: 'Workflow Timeline →',      href: '#' },
-              { icon: FileSearch,  label: 'Audit Trail →',            href: '#' },
-              { icon: ExternalLink,label: 'Bank Reconciliation →',    href: '#' },
-            ].map(({ icon: Icon, label }) => (
+              { icon: ExternalLink, label: 'Open Invoice →',          href: '/billing/invoices'          },
+              { icon: BookOpen,    label: 'View GL Posting →',        href: '/gl/journals'               },
+              { icon: GitBranch,   label: 'Workflow Timeline →',      href: '/admin/workflows'           },
+              { icon: FileSearch,  label: 'Audit Trail →',            href: '/admin/audit-logs'          },
+              { icon: ExternalLink,label: 'Bank Reconciliation →',    href: '/cash-bank/reconciliation'  },
+            ].map(({ icon: Icon, label, href }) => (
               <button key={label}
+                onClick={() => navigate(href)}
                 className="flex items-center gap-1.5 w-full text-left text-[11px] text-emerald-600 dark:text-emerald-400
                   hover:text-emerald-700 py-1.5 border-b border-slate-100 dark:border-slate-800 hover:underline transition-colors">
                 <Icon size={11} />

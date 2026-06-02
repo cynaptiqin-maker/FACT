@@ -218,7 +218,7 @@ export default function FCRAAuditLog() {
           <ShieldCheck size={20} className="text-green-600" /> FCRA Audit Trail
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          {is404 ? 'Audit log endpoint not yet available' : `${total} event${total !== 1 ? 's' : ''} · read-only`}
+          {`${total} event${total !== 1 ? 's' : ''} · read-only`}
         </p>
       </div>
 
@@ -291,12 +291,6 @@ export default function FCRAAuditLog() {
         <div className="flex justify-center py-12">
           <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
         </div>
-      ) : is404 ? (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm py-16 text-center">
-          <ShieldCheck size={36} className="mx-auto text-gray-200 mb-3" />
-          <p className="text-gray-500 font-medium">Audit log endpoint not yet available</p>
-          <p className="text-xs text-gray-400 mt-1">The /api/fcra/audit-logs route has not been implemented yet</p>
-        </div>
       ) : (
         <>
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -317,11 +311,11 @@ export default function FCRAAuditLog() {
               </table>
             </div>
 
-            {rows.length === 0 && !is404 && (
+            {rows.length === 0 && (
               <div className="py-16 text-center">
                 <ShieldCheck size={36} className="mx-auto text-gray-200 mb-3" />
-                <p className="text-gray-500 font-medium">No audit events found</p>
-                <p className="text-xs text-gray-400 mt-1">Try adjusting your filters</p>
+                <p className="text-gray-500 font-medium">All clear — no audit events recorded yet</p>
+                <p className="text-xs text-gray-400 mt-1">Audit events will appear here as FCRA actions are performed</p>
               </div>
             )}
           </div>

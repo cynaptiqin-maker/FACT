@@ -15,11 +15,13 @@ const {
   verifyMFASetupController,
   disableMFAController,
   createUserController,
+  mfaVerifyLoginController,
 } = require('./auth.controller');
 
 // ─── Public Routes ────────────────────────────────────────────────────────────
 router.post('/login', authLimiter, loginController);
 router.post('/refresh', refreshController);
+router.post('/mfa/verify', mfaVerifyLoginController);
 
 // ─── Authenticated Routes ─────────────────────────────────────────────────────
 router.use(authenticate);
@@ -31,6 +33,7 @@ router.post('/change-password', changePasswordController);
 // MFA routes
 router.post('/mfa/setup', setupMFAController);
 router.post('/mfa/verify-setup', verifyMFASetupController);
+router.post('/mfa/enable', verifyMFASetupController);
 router.post('/mfa/disable', disableMFAController);
 
 // User management (admin only)

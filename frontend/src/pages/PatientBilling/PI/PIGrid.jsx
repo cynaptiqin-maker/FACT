@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronDown, ChevronRight, MoreHorizontal, Eye, Edit3, IndianRupee,
@@ -88,12 +89,12 @@ function ExpandedRow({ inv, onOpenDrawer }) {
   ];
 
   const xLinks = [
-    { label:'View AR Entry',      icon:FileText,   href:'#', color:'text-blue-600 dark:text-blue-400'  },
-    { label:'Open GL Posting',    icon:BookOpen,   href:'#', color:'text-violet-600 dark:text-violet-400' },
-    { label:'View Journal',       icon:FileText,   href:'#', color:'text-cyan-600 dark:text-cyan-400'   },
-    { label:'Cash Book',          icon:IndianRupee,href:'#', color:'text-emerald-600 dark:text-emerald-400' },
-    { label:'Bank Recon',         icon:Building2,  href:'#', color:'text-indigo-600 dark:text-indigo-400' },
-    { label:'Workflow History',   icon:GitBranch,  href:'#', color:'text-amber-600 dark:text-amber-400'  },
+    { label:'View AR Entry',      icon:FileText,   href:'/ar',                        color:'text-blue-600 dark:text-blue-400'  },
+    { label:'Open GL Posting',    icon:BookOpen,   href:'/gl/journals',               color:'text-violet-600 dark:text-violet-400' },
+    { label:'View Journal',       icon:FileText,   href:'/gl/journals',               color:'text-cyan-600 dark:text-cyan-400'   },
+    { label:'Cash Book',          icon:IndianRupee,href:'/cash-bank',                 color:'text-emerald-600 dark:text-emerald-400' },
+    { label:'Bank Recon',         icon:Building2,  href:'/cash-bank/reconciliation',  color:'text-indigo-600 dark:text-indigo-400' },
+    { label:'Workflow History',   icon:GitBranch,  href:'/admin/workflows',           color:'text-amber-600 dark:text-amber-400'  },
   ];
 
   return (
@@ -187,7 +188,7 @@ function ExpandedRow({ inv, onOpenDrawer }) {
           {tab === 'financial' && (
             <div className="grid grid-cols-3 gap-3">
               {xLinks.map(({ label, icon: Icon, href, color }) => (
-                <a key={label} href={href}
+                <Link key={label} to={href}
                   className="flex items-center gap-2.5 p-3 rounded-xl border border-slate-200 dark:border-slate-700
                     bg-white dark:bg-slate-800 hover:shadow-md hover:-translate-y-0.5 transition-all group">
                   <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-none">
@@ -200,7 +201,7 @@ function ExpandedRow({ inv, onOpenDrawer }) {
                     </p>
                   </div>
                   <ExternalLink size={11} className="ml-auto text-slate-300 group-hover:text-slate-500 flex-none" />
-                </a>
+                </Link>
               ))}
               <div className="col-span-3 grid grid-cols-4 gap-3 pt-2">
                 {[
