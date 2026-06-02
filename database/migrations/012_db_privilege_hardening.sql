@@ -1,0 +1,37 @@
+-- 012_db_privilege_hardening.sql
+-- Applies principle of least privilege for the application DB role.
+--
+-- IMPORTANT: This migration must be run by a PostgreSQL superuser, NOT by fact_user.
+-- The application connects as fact_user which owns the tables; owners cannot have
+-- their own privileges revoked by themselves in PostgreSQL.
+--
+-- Recommended production deployment sequence:
+--   1. Create a dedicated app role with restricted privileges:
+--        CREATE ROLE fact_app WITH LOGIN PASSWORD '<strong-password>';
+--        GRANT CONNECT ON DATABASE fact_db TO fact_app;
+--        GRANT USAGE ON SCHEMA public TO fact_app;
+--        GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO fact_app;
+--        GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO fact_app;
+--   2. Revoke write privileges on audit tables from the app role:
+--        REVOKE DELETE, UPDATE ON audit_logs      FROM fact_app;
+--        REVOKE DELETE, UPDATE ON fcra_audit_logs FROM fact_app;
+--   3. Update DB_USER in production .env to fact_app.
+--   4. Keep fact_user only for migrations (run scripts/migrate.js as fact_user).
+--
+-- The trigger-based immutability (migration 009) enforces append-only at the
+-- application layer regardless of this privilege hardening. Both controls are
+-- recommended for defence-in-depth.
+
+-- Run these as superuser on the production DB after creating fact_app:
+
+-- GRANT CONNECT ON DATABASE fact_db TO fact_app;
+-- GRANT USAGE ON SCHEMA public TO fact_app;
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO fact_app;
+-- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO fact_app;
+-- REVOKE DELETE, UPDATE ON audit_logs FROM fact_app;
+-- REVOKE DELETE, UPDATE ON fcra_audit_logs FROM fact_app;
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO fact_app;
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE DELETE, UPDATE ON TABLES FROM fact_app;
+-- -- Then for new audit tables only:
+-- REVOKE DELETE, UPDATE ON audit_logs FROM fact_app;
+-- REVOKE DELETE, UPDATE ON fcra_audit_logs FROM fact_app;

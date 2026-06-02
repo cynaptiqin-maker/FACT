@@ -23,10 +23,32 @@ const FCRACompliance   = require('./models/FCRACompliance');
 const FCRAFC4          = require('./models/FCRAFC4');
 const FCRAAuditLog     = require('./models/FCRAAuditLog');
 const fcraAccounting   = require('./fcra.accounting');
+const { getExceptionEngine, EXCEPTION_TYPES } = require('../../shared/exceptions/ExceptionEngine');
 
 router.use(authenticate);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function postJournalWithFallback(postFn, tenantId, entityType, entityId, userId) {
+  try {
+    return await postFn();
+  } catch (err) {
+    // Journal posting failed after status committed — raise mandatory exception for manual resolution
+    const engine = getExceptionEngine();
+    await engine.raise({
+      tenantId,
+      exceptionType: EXCEPTION_TYPES.POSTING_FAILED,
+      entityType,
+      entityId,
+      sourceModule: 'fcra',
+      severity: 'HIGH',
+      title: `FCRA journal post failed for ${entityType} ${entityId}`,
+      description: err.message || 'Journal posting failed after status change committed',
+      metadata: { entityType, entityId, userId, error: err.message },
+    }).catch(() => {}); // Exception raise itself is non-fatal; the real error is the posting failure
+    return null; // Status is already committed; caller receives null journal
+  }
+}
 
 async function nextCode(tableName, column, prefix, padLength = 4) {
   const [rows] = await sequelize.query(
@@ -443,7 +465,10 @@ router.post('/receipts/:id/verify', requirePermission('fcra:approve'), asyncHand
   });
 
   // Post DR/CR journal (non-blocking, outside transaction so a journal failure does not revert the verification)
-  const journal = await fcraAccounting.postReceiptVerified(req.tenantId, r.toJSON(), req.user.id);
+  const journal = await postJournalWithFallback(
+    () => fcraAccounting.postReceiptVerified(req.tenantId, r.toJSON(), req.user.id),
+    req.tenantId, 'FCRAReceipt', r.id, req.user.id
+  );
 
   res.json({ data: r, message: 'Receipt verified', journal: journal ? { entry_number: journal.entry_number } : null });
 }));
@@ -656,7 +681,10 @@ router.post('/utilisation/:id/approve', requirePermission('fcra:approve'), async
       await FCRAProject.increment('admin_utilized',  { by: parseFloat(util.amount), where: { id: util.project_id, tenant_id: req.tenantId } });
     }
 
-    const journal = await fcraAccounting.postUtilisationApproved(req.tenantId, util.toJSON(), req.user.id);
+    const journal = await postJournalWithFallback(
+      () => fcraAccounting.postUtilisationApproved(req.tenantId, util.toJSON(), req.user.id),
+      req.tenantId, 'FCRAUtilisation', util.id, req.user.id
+    );
     return res.json({ data: util, message: 'Voucher approved', ...(warning ? { warning } : {}), journal: journal ? { entry_number: journal.entry_number } : null });
   }
 
@@ -670,7 +698,10 @@ router.post('/utilisation/:id/approve', requirePermission('fcra:approve'), async
     await FCRAProject.increment('utilized_amount', { by: parseFloat(util.amount), where: { id: util.project_id, tenant_id: req.tenantId } });
   }
 
-  const journal = await fcraAccounting.postUtilisationApproved(req.tenantId, util.toJSON(), req.user.id);
+  const journal = await postJournalWithFallback(
+    () => fcraAccounting.postUtilisationApproved(req.tenantId, util.toJSON(), req.user.id),
+    req.tenantId, 'FCRAUtilisation', util.id, req.user.id
+  );
   res.json({ data: util, message: 'Voucher approved', journal: journal ? { entry_number: journal.entry_number } : null });
 }));
 
