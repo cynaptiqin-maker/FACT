@@ -128,6 +128,7 @@ services:
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:5005}
       VITE_APP_NAME: ${VITE_APP_NAME:-FACT FinOS}
+      BACKEND_URL: http://backend:5000
     ports:
       - "${FRONTEND_PORT:-3005}:3000"
     volumes:

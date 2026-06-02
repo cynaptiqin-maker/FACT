@@ -14,7 +14,7 @@ const FCRAProject = sequelize.define(
     description: { type: DataTypes.TEXT },
     project_type: {
       type: DataTypes.STRING(50),
-      defaultValue: 'ongoing',
+      defaultValue: 'programme',
     },
     sector: {
       type: DataTypes.STRING(50),

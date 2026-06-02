@@ -168,15 +168,8 @@ async function blacklistToken(token) {
  * Pass one or more allowed roles: requireRole('admin', 'manager')
  */
 function requireRole(...roles) {
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ success: false, error: 'Authentication required.' });
-    }
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ success: false, error: 'Insufficient role.' });
-    }
-    next();
-  };
+  const { requireRole: rbacCheck } = require('./rbac');
+  return rbacCheck(...roles);
 }
 
 /**
@@ -185,17 +178,8 @@ function requireRole(...roles) {
  * Admins bypass all permission checks.
  */
 function requirePermission(permission) {
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ success: false, error: 'Authentication required.' });
-    }
-    if (req.user.role === 'admin') return next();
-    const perms = req.user.permissions || [];
-    if (!perms.includes(permission)) {
-      return res.status(403).json({ success: false, error: `Permission required: ${permission}` });
-    }
-    next();
-  };
+  const { requirePermission: rbacCheck } = require('./rbac');
+  return rbacCheck(permission);
 }
 
 module.exports = {

@@ -29,6 +29,7 @@ const FCRABankAccount = sequelize.define(
     current_balance: { type: DataTypes.DECIMAL(20, 2), defaultValue: 0 },
     last_transaction_date: { type: DataTypes.DATEONLY },
     is_primary: { type: DataTypes.BOOLEAN, defaultValue: false },
+    is_active:  { type: DataTypes.BOOLEAN, defaultValue: true },
     notes: { type: DataTypes.TEXT },
     created_by: { type: DataTypes.UUID },
   },

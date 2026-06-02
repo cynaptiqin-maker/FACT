@@ -85,7 +85,7 @@ router.post('/run', requirePermission('payroll:run'), asyncHandler(async (req, r
 router.get('/runs', requirePermission('payroll:read'), asyncHandler(async (req, res) => {
   const { sequelize } = require('../../config/database');
   const [rows] = await sequelize.query(
-    'SELECT * FROM payroll_runs WHERE tenant_id = :tenantId ORDER BY period DESC LIMIT 24',
+    'SELECT * FROM payroll_runs WHERE tenant_id = :tenantId ORDER BY year DESC, month DESC LIMIT 24',
     { replacements: { tenantId: req.tenantId }, type: sequelize.QueryTypes.SELECT }
   );
   res.json({ data: rows });

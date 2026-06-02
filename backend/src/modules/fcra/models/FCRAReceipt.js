@@ -34,6 +34,10 @@ const FCRAReceipt = sequelize.define(
       type: DataTypes.STRING(50),
       defaultValue: 'wire_transfer',
     },
+    transaction_type: {
+      type: DataTypes.STRING(20),
+      defaultValue: 'bank_transfer',
+    },
     transaction_reference: { type: DataTypes.STRING(100) },
 
     status: {

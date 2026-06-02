@@ -86,8 +86,8 @@ export function ReliabilityProvider({ children }) {
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
+      toast.dismiss('offline-toast');
       toast.success('Connection restored', { icon: '🌐', duration: 2000 });
-      // Refetch stale queries when back online
       queryClient.invalidateQueries();
     };
 

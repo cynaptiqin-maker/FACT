@@ -11,7 +11,7 @@ router.use(authenticate);
 
 // ─── Claims ───────────────────────────────────────────────────────────────────
 router.get('/claims', requirePermission('insurance:read'), asyncHandler(async (req, res) => {
-  const { Claim } = require('./models/Claim');
+  const Claim = require('./models/Claim');
   const { Op } = require('sequelize');
   const { page = 1, limit = 20, status, tpa_id, search } = req.query;
 
@@ -35,14 +35,14 @@ router.get('/claims', requirePermission('insurance:read'), asyncHandler(async (r
 }));
 
 router.get('/claims/:id', requirePermission('insurance:read'), asyncHandler(async (req, res) => {
-  const { Claim } = require('./models/Claim');
+  const Claim = require('./models/Claim');
   const claim = await Claim.findOne({ where: { id: req.params.id, tenant_id: req.tenantId } });
   if (!claim) return res.status(404).json({ message: 'Claim not found' });
   res.json({ data: claim });
 }));
 
 router.post('/claims', requirePermission('insurance:write'), asyncHandler(async (req, res) => {
-  const { Claim } = require('./models/Claim');
+  const Claim = require('./models/Claim');
   const { v4: uuidv4 } = require('uuid');
   const claim = await Claim.create({
     id: uuidv4(),

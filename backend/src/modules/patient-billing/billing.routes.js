@@ -12,7 +12,7 @@ router.use(authenticate);
 // ─── Invoices ─────────────────────────────────────────────────────────────────
 router.get('/invoices', requirePermission('billing:read'), asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, status, from, to, search, billing_type } = req.query;
-  const { PatientInvoice } = require('./models/PatientInvoice');
+  const PatientInvoice = require('./models/PatientInvoice');
   const { Op } = require('sequelize');
 
   const where = { tenant_id: req.tenantId };
@@ -46,10 +46,9 @@ router.post('/invoices', requirePermission('billing:write'), asyncHandler(async 
 }));
 
 router.get('/invoices/:id', requirePermission('billing:read'), asyncHandler(async (req, res) => {
-  const { PatientInvoice, InvoiceLineItem } = require('./models/PatientInvoice');
+  const PatientInvoice = require('./models/PatientInvoice');
   const invoice = await PatientInvoice.findOne({
     where: { id: req.params.id, tenant_id: req.tenantId },
-    include: [{ model: InvoiceLineItem, as: 'line_items' }],
   });
   if (!invoice) return res.status(404).json({ message: 'Invoice not found' });
   res.json({ data: invoice });
@@ -71,7 +70,7 @@ router.post('/invoices/:id/payment', requirePermission('billing:write'), asyncHa
 }));
 
 router.post('/invoices/:id/cancel', requirePermission('billing:write'), asyncHandler(async (req, res) => {
-  const { PatientInvoice } = require('./models/PatientInvoice');
+  const PatientInvoice = require('./models/PatientInvoice');
   await PatientInvoice.update(
     { status: 'CANCELLED', cancellation_reason: req.body.reason },
     { where: { id: req.params.id, tenant_id: req.tenantId } }
